@@ -4,57 +4,48 @@ import { StyleSheet, Text, TextInput, TouchableOpacity, FlatList, View } from 'r
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Row from './components/Row';
 import { Task } from './types/Task';
-import * as SQLite from 'expo-sqlite';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-
+const STORAGE_KEY = 'YEK-EGAROTS'
 
 export default function App() {
   const [inputText, setInputText] = useState<string>('')
   const [tasks, setTasks] = useState<Task[]>([])
-  const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
 
   useEffect(() => {
-      const initDB = async () => {
-        const database = await SQLite.openDatabaseAsync('tasks.db');
-        setDb(database);
+    (async () => {
+      try {
+        const json = await AsyncStorage.getItem(STORAGE_KEY);
+        if (json) setTasks(JSON.parse(json));
+      } catch (e) {
+        console.log("Error")
+      }
+    })();
+  }, []);
 
-        await database.execAsync(`
-          CREATE TABLE IF NOT EXISTS tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            text TEXT NOT NULL,
-            done INTEGER DEFAULT 0
-          );
-        `);
-
-        loadTasks(database);
-      };
-
-      initDB();
-    }, []);
-
-  const loadTasks = async (db: SQLite.SQLiteDatabase) => {
-    const result = await db.getAllAsync<Task>('SELECT * FROM tasks ORDER BY id DESC');
-      setTasks(result);
-  }
+  useEffect(() => {
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+  }, [tasks]);
 
   const addTask = async () => {
-    if (!inputText.trim() || !db) return;
-
-      await db.runAsync('INSERT INTO tasks (text) VALUES (?)', inputText);
-      setInputText('');
-      loadTasks(db);
+    setTasks([...tasks, { id: tasks.length + 1, text: inputText, done: 0}])
+    setInputText('')
   }
 
   const toggleTask = async (id: number, done: number) => {
-    if (!db) return;
-    await db.runAsync('UPDATE tasks SET done = ? WHERE id = ?', done ? 0 : 1, id);
-    loadTasks(db);
+    const newTasks: Task[] = tasks.map(i => {
+      if (i.id == id){
+        return { id: i.id, text: i.text, done: (i.done == 0 ? 1 : 0)}
+      }
+      else{
+        return i
+      }
+    })
+    setTasks(newTasks)
   }
 
   const deleteTask = async (id: number) => {
-    if (!db) return;
-    await db.runAsync('DELETE FROM tasks WHERE id = ?', id);
-    loadTasks(db);
+    setTasks(tasks.filter(i => (i.id !== id)))
   }
   
   
